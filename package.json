@@ -8,6 +8,7 @@
     "dev": "concurrently \"npx tsc --watch\" \"nodemon ./bin/www\""
   },
   "dependencies": {
+    "@prisma/client": "6.17.1",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/morgan": "^1.9.10",
@@ -25,6 +26,7 @@
     "@types/node": "^24.0.13",
     "concurrently": "^9.2.0",
     "nodemon": "^3.1.10",
+    "prisma": "^6.17.1",
     "typescript": "^5.8.3"
   }
 }
