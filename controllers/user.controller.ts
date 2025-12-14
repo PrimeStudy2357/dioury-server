@@ -4,6 +4,8 @@ import z from "zod";
 import { ErrorResponse } from "../types/response";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { generateRandomCode } from "../services/user.service";
+import mailService from "../services/mail.service";
 
 const prisma = new PrismaClient();
 
@@ -70,5 +72,13 @@ export const authEmailController = async (req: Request, res: Response) => {
   }
 
   // 인증번호 생성
-  return res.status(201).json();
+  const code = generateRandomCode();
+  // 메일 발송
+  const isSent = await mailService.sendVerificationEmail(email, code);
+
+  if (isSent) {
+    return res.status(201).json();
+  } else {
+    res.status(500).json({ message: "메일 발송 실패" } as ErrorResponse);
+  }
 };
