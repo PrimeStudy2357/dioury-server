@@ -54,3 +54,21 @@ export const signUpController = async (req: Request, res: Response) => {
   }
 };
 
+export const authEmailController = async (req: Request, res: Response) => {
+  const email = (req.body as { email: string }).email;
+
+  if (!email) {
+    return res.status(400).json({ message: "이메일을 입력해주세요." });
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  // 이미 사용 중인 이메일 있음
+  if (existingUser) {
+    return res
+      .status(409)
+      .json({ message: "이미 가입된 이메일입니다." } as ErrorResponse);
+  }
+
+  // 인증번호 생성
+  return res.status(201).json();
+};
