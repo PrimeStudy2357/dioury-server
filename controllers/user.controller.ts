@@ -2,12 +2,12 @@ import { Request, Response } from "express";
 import { userSchema } from "../schemas/user.schema";
 import z from "zod";
 import { ErrorResponse } from "../types/response";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../services/connectors/prisma.service";
 import bcrypt from "bcrypt";
 import { generateRandomCode } from "../services/user.service";
 import mailService from "../services/mail.service";
-
-const prisma = new PrismaClient();
+import redisService from "../services/connectors/redis.service";
+import { ErrorReply } from "redis";
 
 export const signUpController = async (req: Request, res: Response) => {
   try {
@@ -56,6 +56,8 @@ export const signUpController = async (req: Request, res: Response) => {
   }
 };
 
+const REDIS_AUTH_EMAIL_KEY_PREFIX = "dioury-authEmail-";
+
 export const authEmailController = async (req: Request, res: Response) => {
   const email = (req.body as { email: string }).email;
 
@@ -73,6 +75,16 @@ export const authEmailController = async (req: Request, res: Response) => {
 
   // 인증번호 생성
   const code = generateRandomCode();
+
+  // Redis에 생성한 인증번호 + 메일 키 값 쌍 저장
+  try {
+    await redisService.set(`${REDIS_AUTH_EMAIL_KEY_PREFIX}${email}`, code, {
+      expiration: { type: "EX", value: 180 },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "키 저장 실패" } as ErrorReply);
+  }
+
   // 메일 발송
   const isSent = await mailService.sendVerificationEmail(email, code);
 
