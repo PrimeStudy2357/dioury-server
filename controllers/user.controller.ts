@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import e, { Request, Response } from "express";
 import { userSchema } from "../schemas/user.schema";
 import z from "zod";
 import { ErrorResponse } from "../types/response";
@@ -7,7 +7,6 @@ import bcrypt from "bcrypt";
 import { generateRandomCode } from "../services/user.service";
 import mailService from "../services/mail.service";
 import redisService from "../services/connectors/redis.service";
-import { ErrorReply } from "redis";
 
 export const signUpController = async (req: Request, res: Response) => {
   try {
@@ -82,7 +81,7 @@ export const authEmailController = async (req: Request, res: Response) => {
       expiration: { type: "EX", value: 180 },
     });
   } catch (error) {
-    res.status(500).json({ message: "키 저장 실패" } as ErrorReply);
+    res.status(500).json({ message: "키 저장 실패" } as ErrorResponse);
   }
 
   // 메일 발송
@@ -92,5 +91,52 @@ export const authEmailController = async (req: Request, res: Response) => {
     return res.status(201).json();
   } else {
     res.status(500).json({ message: "메일 발송 실패" } as ErrorResponse);
+  }
+};
+
+const REDIS_AUTH_EMAIL_CHECK_KEY_PREFIX = "dioury-authEmailCheck-";
+
+export const authEmailCheckController = async (req: Request, res: Response) => {
+  const { email, code } = req.body as { email: string; code: string };
+
+  if (!email) {
+    return res.status(400).json({ message: "이메일을 입력해주세요." });
+  }
+
+  if (!code) {
+    return res.status(409).json({ message: "코드를 입력해주세요." });
+  }
+
+  try {
+    const savedCode = await redisService.get(
+      `${REDIS_AUTH_EMAIL_KEY_PREFIX}${email}`
+    );
+
+    if (!savedCode) {
+      return res
+        .status(404)
+        .json({ message: "인증 정보가 없습니다" } as ErrorResponse);
+    }
+
+    if (savedCode !== code) {
+      return res
+        .status(409)
+        .json({ message: "인증 번호가 틀렸습니다" } as ErrorResponse);
+    }
+
+    await redisService.unlink(`${REDIS_AUTH_EMAIL_KEY_PREFIX}${email}`);
+
+    // 인증 확인 되었음을 레디스에 기록
+    await redisService.set(`${REDIS_AUTH_EMAIL_CHECK_KEY_PREFIX}${email}`, 1, {
+      expiration: {
+        type: "EX",
+        value: 600,
+      },
+    });
+
+    return res.status(200).json({ message: "인증 성공" });
+  } catch (error) {
+    console.error("Redis Error: ", error);
+    return res.status(500).json({ message: "서버 오류" } as ErrorResponse);
   }
 };
