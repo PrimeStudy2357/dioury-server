@@ -7,6 +7,9 @@ import createError from "http-errors";
 import indexRouter from "./routes/index";
 import usersRouter from "./routes/user.route";
 import signUpRouter from "./routes/signup.route";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 
@@ -41,4 +44,3 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 export default app;
-

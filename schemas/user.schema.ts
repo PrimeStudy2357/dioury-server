@@ -21,4 +21,3 @@ export const userSchema = z.object({
   funnel: z.string().nonempty({ error: "유입 경로를 입력해주세요." }),
   purpose: z.string().nonempty({ error: "사용 목적을 입력해주세요." }),
 });
-
