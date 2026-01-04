@@ -9,7 +9,14 @@ import usersRouter from "./routes/user.route";
 import signUpRouter from "./routes/signup.route";
 import dotenv from "dotenv";
 
-dotenv.config();
+const result = dotenv.config();
+if (result.error) {
+  console.error(".env 파일을 찾을 수 없습니다!", result.error);
+} else {
+  console.log("----------------------------");
+  console.log(".env 로드 성공:", result.parsed);
+  console.log("----------------------------");
+}
 
 const app = express();
 
@@ -44,3 +51,4 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 export default app;
+
