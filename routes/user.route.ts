@@ -1,4 +1,5 @@
 import express from "express";
+import { checkNickname } from "../controllers/user.controller";
 
 const router = express.Router();
 
@@ -7,5 +8,6 @@ router.get("/", () => {
   return;
 });
 
-export default router;
+router.get("/checkNickname", checkNickname);
 
+export default router;

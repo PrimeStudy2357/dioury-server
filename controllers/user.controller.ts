@@ -140,3 +140,37 @@ export const authEmailCheckController = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "서버 오류" } as ErrorResponse);
   }
 };
+
+/**
+ * 닉네임 중복 여부를 확인한다.
+ */
+export const checkNickname = async (req: Request, res: Response) => {
+  // 1. 요청 검증
+  const { nickname } = req.query as { nickname: string };
+
+  if (!nickname) {
+    return res.status(400).json({
+      message: "닉네임을 입력해주세요.",
+    } as ErrorResponse);
+  }
+
+  try {
+    // 2. 닉네임 중복 확인
+    const existingUser = await prisma.user.findUnique({ where: { nickname } });
+
+    // 이미 사용 중인 닉네임 있음
+    if (existingUser) {
+      return res
+        .status(409)
+        .json({ message: "이미 사용 중인 닉네임입니다." } as ErrorResponse);
+    }
+
+    // 사용 중인 닉네임 없음
+    return res.status(200).json({});
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error" } as ErrorResponse);
+  }
+};

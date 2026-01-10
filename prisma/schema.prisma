@@ -16,7 +16,7 @@ datasource db {
 model User {
   email   String  @unique @id
   password  String  @db.VarChar(100)
-  nickname  String  @db.VarChar(100)
+  nickname  String  @db.VarChar(100) @unique
   funnel    String  @db.VarChar(100) // 유입경로
   purpose   String @db.VarChar(100) // 사용목적
   createdAt DateTime @default(now()) @map("created_at")
