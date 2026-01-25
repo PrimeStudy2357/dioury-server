@@ -1,3 +1,14 @@
+import dotenv from "dotenv";
+
+const result = dotenv.config();
+if (result.error) {
+  console.error(".env 파일을 찾을 수 없습니다!", result.error);
+} else {
+  console.log("----------------------------");
+  console.log(".env 로드 성공:", result.parsed);
+  console.log("----------------------------");
+}
+
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -10,16 +21,7 @@ import createError from "http-errors";
 import indexRouter from "./routes/index";
 import usersRouter from "./routes/user.route";
 import signUpRouter from "./routes/signup.route";
-import dotenv from "dotenv";
-
-const result = dotenv.config();
-if (result.error) {
-  console.error(".env 파일을 찾을 수 없습니다!", result.error);
-} else {
-  console.log("----------------------------");
-  console.log(".env 로드 성공:", result.parsed);
-  console.log("----------------------------");
-}
+import signInRouter from "./routes/signin.route";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -38,7 +40,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // 세션 설정
 app.use(
   session({
-    store: new RedisStore({ client: redisClient }),
+    store: new RedisStore({
+      client: redisClient,
+      prefix: "dioury-loginSession-",
+    }),
     secret: process.env.SESSION_STORAGE_SECRET ?? "",
     resave: false,
     saveUninitialized: false,
@@ -55,6 +60,7 @@ app.use(
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
 app.use("/signup", signUpRouter);
+app.use("/signin", signInRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {
