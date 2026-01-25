@@ -1,6 +1,9 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import { RedisStore } from "connect-redis";
+import redisClient from "./services/connectors/redis.service";
 import logger from "morgan";
 import createError from "http-errors";
 
@@ -18,6 +21,8 @@ if (result.error) {
   console.log("----------------------------");
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
 const app = express();
 
 // view engine setup
@@ -29,6 +34,23 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
+
+// 세션 설정
+app.use(
+  session({
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.SESSION_STORAGE_SECRET ?? "",
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      httpOnly: true,
+      secure: isProd,
+      maxAge: 1000 * 60 * 60 * 24,
+      sameSite: isProd ? "none" : "lax",
+    },
+  }),
+);
 
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
@@ -51,4 +73,3 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 export default app;
-
