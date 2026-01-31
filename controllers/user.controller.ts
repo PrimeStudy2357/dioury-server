@@ -109,7 +109,7 @@ export const authEmailCheckController = async (req: Request, res: Response) => {
 
   try {
     const savedCode = await redisService.get(
-      `${REDIS_AUTH_EMAIL_KEY_PREFIX}${email}`
+      `${REDIS_AUTH_EMAIL_KEY_PREFIX}${email}`,
     );
 
     if (!savedCode) {
@@ -174,3 +174,40 @@ export const checkNickname = async (req: Request, res: Response) => {
       .json({ message: "Internal Server Error" } as ErrorResponse);
   }
 };
+
+/** 로그인 */
+export const signInController = async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  try {
+    // 이메일 확인
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ message: "존재하지 않는 이메일입니다." });
+    }
+
+    // 비밀번호 확인
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "비밀번호를 다시 확인해주세요." });
+    }
+
+    // 세션에 사용자 정보를 저장
+    req.session.email = user.email;
+
+    res.status(200).json({ message: "로그인 성공" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "서버 오류" });
+  }
+};
+
+/** 로그아웃 */
+export const signOutController = async (req: Request, res: Response) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ message: "로그아웃 실패" });
+    res.clearCookie("connect.sid"); // 세션 쿠키 삭제
+    res.status(200).json({ message: "로그아웃되었습니다." });
+  });
+};
+
