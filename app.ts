@@ -28,6 +28,8 @@ const isProd = process.env.NODE_ENV === "production";
 
 const app = express();
 
+app.set("trust proxy", true);
+
 // CORS 옵션 설정
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 app.use(
@@ -70,7 +72,7 @@ app.use(
       httpOnly: true,
       secure: isProd,
       maxAge: 1000 * 60 * 60 * 24,
-      sameSite: isProd ? "none" : "lax",
+      sameSite: "lax",
     },
   }),
 );
