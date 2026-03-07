@@ -10,6 +10,7 @@ if (result.error) {
 }
 
 import express, { Request, Response, NextFunction } from "express";
+import cors from "cors";
 import path from "path";
 import cookieParser from "cookie-parser";
 import session from "express-session";
@@ -26,6 +27,23 @@ import signInRouter from "./routes/signin.route";
 const isProd = process.env.NODE_ENV === "production";
 
 const app = express();
+
+// CORS 옵션 설정
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 // view engine setup
 app.set("views", path.join(__dirname, "views"));
@@ -81,4 +99,3 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 export default app;
-
