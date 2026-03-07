@@ -211,3 +211,34 @@ export const signOutController = async (req: Request, res: Response) => {
   });
 };
 
+/** 로그인 한 사용자의 자기 자신 정보 조회 */
+export const sayMyName = async (req: Request, res: Response) => {
+  const userEmail = req.session.email;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: {
+        email: true,
+        nickname: true,
+      },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "사용자 정보를 찾을 수 없습니다." });
+    }
+
+    return res.status(200).json({
+      message: "사용자 조회 성공",
+      user,
+    });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error" } as ErrorResponse);
+  }
+};
+
