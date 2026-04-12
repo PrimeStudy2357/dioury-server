@@ -23,6 +23,7 @@ import indexRouter from "./routes/index";
 import usersRouter from "./routes/user.route";
 import signUpRouter from "./routes/signup.route";
 import signInRouter from "./routes/signin.route";
+import timelineRouter from "./routes/timeline.route";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -81,6 +82,7 @@ app.use("/", indexRouter);
 app.use("/users", usersRouter);
 app.use("/signup", signUpRouter);
 app.use("/signin", signInRouter);
+app.use("/timeline", timelineRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {
