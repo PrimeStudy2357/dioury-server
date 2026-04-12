@@ -17,4 +17,3 @@ router.post("/authEmail", authEmailController);
 router.post("/authEmailCheck", authEmailCheckController);
 
 export default router;
-
