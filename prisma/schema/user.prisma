@@ -1,0 +1,13 @@
+model User {
+  id              Int              @id @default(autoincrement())
+  email           String           @unique
+  password        String           @db.VarChar(100)
+  nickname        String           @unique @db.VarChar(100)
+  funnel          String           @db.VarChar(100) // 유입경로
+  purpose         String           @db.VarChar(100) // 사용목적
+  createdAt       DateTime         @default(now())
+  myTimeline      Timeline[]
+  joinedTimelines TimelineMember[]
+
+  @@map("users")
+}
