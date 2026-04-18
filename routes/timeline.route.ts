@@ -1,5 +1,6 @@
 import express from "express";
 import { createTimelineController } from "../controllers/timeline.controller";
+import { isAuthenticated } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
@@ -7,4 +8,3 @@ const router = express.Router();
 router.post("/", createTimelineController);
 
 export default router;
-
