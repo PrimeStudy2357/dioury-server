@@ -44,3 +44,23 @@ export const createTimelineController = async (req: Request, res: Response) => {
       .json({ message: "Internal Server Error" } as ErrorResponse);
   }
 };
+
+/**
+ * 가입한 타임라인 목록 조회 컨트롤러
+ */
+export const getJoinedTimelinesController = async (
+  req: Request,
+  res: Response,
+) => {
+  return res.status(501).json({ message: "구현 중" });
+};
+
+/**
+ * 전체(추천) 타임라인 목록 조회 컨트롤러
+ */
+export const getRecommendedTimelinesController = async (
+  req: Request,
+  res: Response,
+) => {
+  return res.status(501).json({ message: "구현 중" });
+};
