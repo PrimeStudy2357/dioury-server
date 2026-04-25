@@ -2,7 +2,7 @@ model Timeline {
   id           Int              @id @default(autoincrement())
   name         String           @unique
   isPublic     Boolean
-  profileImage String
+  profileImage String?
   category     String
   keyword1     String
   keyword2     String?
@@ -10,9 +10,9 @@ model Timeline {
   description  String
   period       String
   isOn         Boolean
-  memberCnt    Int
+  memberCnt    Int              @default(1)
   members      TimelineMember[]
-  likeCnt      Int
+  likeCnt      Int              @default(0)
   creator      User             @relation(fields: [creatorName], references: [nickname])
   creatorName  String
   createdAt    DateTime         @default(now())
@@ -39,7 +39,6 @@ model TimelineMember {
   timeline Timeline @relation(fields: [timelineId], references: [id])
 
   @@id([userId, timelineId])
-
   @@map("timeline_member")
 }
 

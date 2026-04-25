@@ -194,6 +194,8 @@ export const signInController = async (req: Request, res: Response) => {
 
     // 세션에 사용자 정보를 저장
     req.session.email = user.email;
+    req.session.nickname = user.nickname;
+    req.session.userId = user.id;
 
     res.status(200).json({ message: "로그인 성공" });
   } catch (error) {
@@ -241,4 +243,3 @@ export const sayMyName = async (req: Request, res: Response) => {
       .json({ message: "Internal Server Error" } as ErrorResponse);
   }
 };
-
