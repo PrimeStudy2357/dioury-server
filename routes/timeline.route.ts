@@ -18,3 +18,4 @@ router.get("/", getRecommendedTimelinesController);
 router.get("/my", isAuthenticated, getJoinedTimelinesController);
 
 export default router;
+

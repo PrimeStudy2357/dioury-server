@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
-import { timelineSchema } from "../schemas/timeline.schema";
+import {
+  getTimelineListSchema,
+  timelineSchema,
+} from "../schemas/timeline.schema";
 import prismaService from "../services/connectors/prisma.service";
 import { ErrorResponse } from "../types/response";
+import z from "zod";
 
 export const createTimelineController = async (req: Request, res: Response) => {
   try {
@@ -62,5 +66,49 @@ export const getRecommendedTimelinesController = async (
   req: Request,
   res: Response,
 ) => {
-  return res.status(501).json({ message: "구현 중" });
+  try {
+    const validatedData = getTimelineListSchema.parse(req.query);
+    const { order, perPage, page, sortBy } = validatedData;
+
+    /** 페이징 계산 */
+    const skip = (page - 1) * perPage;
+
+    const [totalCount, timelines] = await Promise.all([
+      prismaService.timeline.count({}),
+      prismaService.timeline.findMany({
+        skip: skip,
+        take: perPage,
+        orderBy: {
+          [sortBy]: order,
+        },
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: timelines,
+      pagination: {
+        page,
+        perPage,
+        totalCount,
+        totalPages: Math.ceil(totalCount / perPage),
+        hasNextPage: page * perPage < totalCount,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    // Zod 에러 처리
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      });
+    }
+
+    // 일반 서버 에러 처리
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
 };
+
