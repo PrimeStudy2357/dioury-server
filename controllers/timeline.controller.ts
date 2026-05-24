@@ -112,3 +112,38 @@ export const getRecommendedTimelinesController = async (
   }
 };
 
+/**
+ * 타임라인 이름 중복 여부를 확인한다.
+ */
+export const checkTimelineTitle = async (req: Request, res: Response) => {
+  // 1. 요청 검증
+  const { name } = req.query as { name: string };
+
+  if (!name) {
+    return res.status(400).json({
+      message: "이름을 입력해주세요.",
+    } as ErrorResponse);
+  }
+
+  try {
+    // 2. 이름 중복 확인
+    const existingTimeline = await prismaService.timeline.findUnique({
+      where: { name: name },
+    });
+
+    // 이미 사용 중인 이름 있음
+    if (existingTimeline) {
+      return res
+        .status(409)
+        .json({ message: "이미 사용 중인 이름입니다." } as ErrorResponse);
+    }
+
+    // 사용 중인 이름 없음
+    return res.status(200).json({});
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error" } as ErrorResponse);
+  }
+};

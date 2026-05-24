@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  checkTimelineTitle,
   createTimelineController,
   getJoinedTimelinesController,
   getRecommendedTimelinesController,
@@ -17,5 +18,7 @@ router.get("/", getRecommendedTimelinesController);
 /** 타임라인 조회 (내가 가입한 타임라인) */
 router.get("/my", isAuthenticated, getJoinedTimelinesController);
 
-export default router;
+/** 타임라인 이름 중복 조회 */
+router.get("/checkname", isAuthenticated, checkTimelineTitle);
 
+export default router;
