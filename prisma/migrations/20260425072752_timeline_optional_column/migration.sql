@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `timelines` MODIFY `profileImage` VARCHAR(191) NULL,
+    MODIFY `memberCnt` INTEGER NOT NULL DEFAULT 1,
+    MODIFY `likeCnt` INTEGER NOT NULL DEFAULT 0;

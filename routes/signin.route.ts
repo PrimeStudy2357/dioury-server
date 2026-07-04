@@ -18,4 +18,3 @@ router.post("/signout", signOutController);
 router.get("/saymyname", isAuthenticated, sayMyName);
 
 export default router;
-
