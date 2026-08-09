@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "prisma generate && npx tsc",
-    "start": "NODE_ENV=production node ./bin/www",
+    "start": "npm prisma migrate deploy && NODE_ENV=production node ./bin/www",
     "dev": "concurrently \"npx tsc --watch\" \"nodemon ./bin/www\""
   },
   "dependencies": {
