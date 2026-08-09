@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import {
   getTimelineListSchema,
+  getTimelineParamsSchema,
   timelineSchema,
 } from "../schemas/timeline.schema";
 import prismaService from "../services/connectors/prisma.service";
@@ -105,6 +106,42 @@ export const getRecommendedTimelinesController = async (
     }
 
     // 일반 서버 에러 처리
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+};
+
+/**
+ * 타임라인 상세 조회 컨트롤러
+ */
+export const getTimelineController = async (req: Request, res: Response) => {
+  try {
+    const { id } = getTimelineParamsSchema.parse(req.params);
+
+    const timeline = await prismaService.timeline.findUnique({
+      where: { id },
+    });
+
+    if (!timeline) {
+      return res
+        .status(404)
+        .json({ message: "타임라인을 찾을 수 없습니다." } as ErrorResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: timeline,
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "서버 오류가 발생했습니다.",

@@ -8,4 +8,3 @@ export const LIST_ORDER = {
   ASCENDING: "asc",
   DESCENDING: "desc",
 };
-

@@ -4,6 +4,7 @@ import {
   createTimelineController,
   getJoinedTimelinesController,
   getRecommendedTimelinesController,
+  getTimelineController,
 } from "../controllers/timeline.controller";
 import { isAuthenticated } from "../middlewares/auth.middleware";
 
@@ -20,5 +21,8 @@ router.get("/my", isAuthenticated, getJoinedTimelinesController);
 
 /** 타임라인 이름 중복 조회 */
 router.get("/checkname", isAuthenticated, checkTimelineTitle);
+
+/** 타임라인 상세 조회 */
+router.get("/:id", getTimelineController);
 
 export default router;

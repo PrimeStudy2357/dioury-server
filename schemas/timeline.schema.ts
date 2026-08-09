@@ -14,6 +14,11 @@ export const timelineSchema = z.object({
   period: z.string().optional(),
 });
 
+/** 타임라인 상세 조회 요청 파라미터 스키마 */
+export const getTimelineParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
 /** 타임라인 목록 조회 요청 스키마 */
 export const getTimelineListSchema = z.object({
   /** 페이지 번호 */
