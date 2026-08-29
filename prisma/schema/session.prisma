@@ -1,0 +1,68 @@
+model Session {
+  id             Int      @id @default(autoincrement())
+  timelineId     Int
+  timeline       Timeline @relation(fields: [timelineId], references: [id])
+  title          String
+  place          String
+  date           DateTime
+  content        String   @db.LongText
+  isPublic       Boolean
+  writerNickname String
+  writerId       Int
+  writer         User     @relation(fields: [writerId], references: [id])
+  viewCnt        Int      @default(0)
+  reactionCnt    Int      @default(0)
+  // 댓글 상세 목록은 별도 API(comments 테이블 조회)로 제공, 여기서는 카운트만 유지
+  commentCnt     Int      @default(0)
+  participantCnt Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  // 세션 상세 접속 시 참여자 목록 조인
+  participants SessionParticipant[]
+  reactions    Reaction[]
+  comments     Comment[]
+
+  @@map("sessions")
+}
+
+model SessionParticipant {
+  sessionId  Int
+  userId     Int
+  timelineId Int
+  // 세션 작성자 여부
+  isWriter   Boolean @default(false)
+  // 세션 수정 권한
+  canEdit    Boolean @default(false)
+
+  session        Session        @relation(fields: [sessionId], references: [id])
+  timelineMember TimelineMember @relation(fields: [userId, timelineId], references: [userId, timelineId])
+
+  @@id([sessionId, userId, timelineId])
+  @@map("session_participants")
+}
+
+model Reaction {
+  sessionId Int
+  userId    Int
+  emoji     String
+  createdAt DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([sessionId, userId, emoji])
+  @@map("reactions")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  sessionId Int
+  userId    Int
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("comments")
+}

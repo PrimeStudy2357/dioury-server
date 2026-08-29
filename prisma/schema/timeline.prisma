@@ -16,6 +16,7 @@ model Timeline {
   creator      User             @relation(fields: [creatorName], references: [nickname])
   creatorName  String
   createdAt    DateTime         @default(now())
+  sessions     Session[]
 
   @@map("timelines")
 }
@@ -37,6 +38,8 @@ model TimelineMember {
 
   user     User     @relation(fields: [userId], references: [id])
   timeline Timeline @relation(fields: [timelineId], references: [id])
+
+  sessionParticipants SessionParticipant[]
 
   @@id([userId, timelineId])
   @@map("timeline_member")
