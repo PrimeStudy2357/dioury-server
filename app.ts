@@ -24,6 +24,7 @@ import usersRouter from "./routes/user.route";
 import signUpRouter from "./routes/signup.route";
 import signInRouter from "./routes/signin.route";
 import timelineRouter from "./routes/timeline.route";
+import sessionRouter from "./routes/session.route";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -83,6 +84,7 @@ app.use("/users", usersRouter);
 app.use("/signup", signUpRouter);
 app.use("/signin", signInRouter);
 app.use("/timeline", timelineRouter);
+app.use("/session", sessionRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {

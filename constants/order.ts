@@ -8,3 +8,12 @@ export const LIST_ORDER = {
   ASCENDING: "asc",
   DESCENDING: "desc",
 };
+
+export const SESSION_LIST_SORT_BY = {
+  CREATED_AT: "createdAt",
+  DATE: "date",
+  VIEW_COUNT: "viewCnt",
+  REACTION_COUNT: "reactionCnt",
+  COMMENT_COUNT: "commentCnt",
+  PARTICIPANT_COUNT: "participantCnt",
+};
