@@ -5,7 +5,8 @@
   "scripts": {
     "build": "prisma generate && npx tsc",
     "start": "NODE_ENV=production node ./bin/www",
-    "dev": "concurrently \"npx tsc --watch\" \"nodemon ./bin/www\""
+    "dev": "concurrently \"npx tsc --watch\" \"nodemon ./bin/www\"",
+    "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "6.17.1",

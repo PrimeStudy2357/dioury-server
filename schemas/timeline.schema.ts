@@ -31,3 +31,18 @@ export const getTimelineListSchema = z.object({
   order: z.enum(Object.values(LIST_ORDER)).default(LIST_ORDER.DESCENDING),
 });
 
+/** 타임라인 멤버 검색 요청 파라미터 스키마 */
+export const getTimelineMembersParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+/** 타임라인 멤버 검색 요청 쿼리 스키마 */
+export const getTimelineMembersQuerySchema = z.object({
+  /** 닉네임 검색어 */
+  query: z.string().trim().min(1).max(100).optional(),
+  /** 페이지 번호 */
+  page: z.coerce.number().int().positive().default(1),
+  /** 페이지당 아이템 수 */
+  perPage: z.coerce.number().int().min(1).max(100).default(20),
+});
+

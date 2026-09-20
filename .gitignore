@@ -3,3 +3,4 @@ dist/
 .claude/
 /generated/prisma
 .env
+prisma/seed.config.js

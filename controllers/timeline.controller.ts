@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import {
   getTimelineListSchema,
+  getTimelineMembersParamsSchema,
+  getTimelineMembersQuerySchema,
   getTimelineParamsSchema,
   timelineSchema,
 } from "../schemas/timeline.schema";
@@ -133,6 +135,92 @@ export const getTimelineController = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       data: timeline,
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+};
+
+/**
+ * 타임라인 멤버 검색/목록 조회 컨트롤러
+ * 세션 참여자 선택 등에서 사용하며, 요청자도 해당 타임라인의 멤버여야 조회할 수 있다.
+ */
+export const getTimelineMembersController = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { id: timelineId } = getTimelineMembersParamsSchema.parse(
+      req.params,
+    );
+    const { query, page, perPage } = getTimelineMembersQuerySchema.parse(
+      req.query,
+    );
+
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "로그인이 필요합니다." } as ErrorResponse);
+    }
+
+    const requester = await prismaService.timelineMember.findUnique({
+      where: { userId_timelineId: { userId, timelineId } },
+    });
+
+    if (!requester) {
+      return res
+        .status(403)
+        .json({ message: "권한이 없습니다." } as ErrorResponse);
+    }
+
+    const where = {
+      timelineId,
+      ...(query && { user: { nickname: { contains: query } } }),
+    };
+
+    const skip = (page - 1) * perPage;
+
+    const [totalCount, members] = await Promise.all([
+      prismaService.timelineMember.count({ where }),
+      prismaService.timelineMember.findMany({
+        where,
+        skip,
+        take: perPage,
+        select: {
+          userId: true,
+          role: true,
+          user: { select: { nickname: true, email: true } },
+        },
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: members.map(({ userId, role, user }) => ({
+        userId,
+        role,
+        nickname: user.nickname,
+        email: user.email,
+      })),
+      pagination: {
+        page,
+        perPage,
+        totalCount,
+        totalPages: Math.ceil(totalCount / perPage),
+        hasNextPage: page * perPage < totalCount,
+      },
     });
   } catch (error) {
     console.error(error);
