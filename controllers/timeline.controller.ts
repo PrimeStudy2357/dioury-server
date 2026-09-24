@@ -25,22 +25,41 @@ export const createTimelineController = async (req: Request, res: Response) => {
     const [keyword1, keyword2, keyword3] = keywords;
 
     const userNickname = req.session.nickname;
+    const userId = req.session.userId;
 
-    const newTimeline = await prismaService.timeline.create({
-      data: {
-        name,
-        description,
-        isOn,
-        isPublic,
-        keyword1,
-        keyword2,
-        keyword3,
-        category,
-        period,
-        creator: {
-          connect: { nickname: userNickname },
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "로그인이 필요합니다." } as ErrorResponse);
+    }
+
+    const newTimeline = await prismaService.$transaction(async (tx) => {
+      const timeline = await tx.timeline.create({
+        data: {
+          name,
+          description,
+          isOn,
+          isPublic,
+          keyword1,
+          keyword2,
+          keyword3,
+          category,
+          period,
+          creator: {
+            connect: { nickname: userNickname },
+          },
         },
-      },
+      });
+
+      await tx.timelineMember.create({
+        data: {
+          userId,
+          timelineId: timeline.id,
+          role: "OWNER",
+        },
+      });
+
+      return timeline;
     });
 
     return res.status(201).json(newTimeline);
@@ -160,9 +179,7 @@ export const getTimelineMembersController = async (
   res: Response,
 ) => {
   try {
-    const { id: timelineId } = getTimelineMembersParamsSchema.parse(
-      req.params,
-    );
+    const { id: timelineId } = getTimelineMembersParamsSchema.parse(req.params);
     const { query, page, perPage } = getTimelineMembersQuerySchema.parse(
       req.query,
     );
@@ -272,3 +289,4 @@ export const checkTimelineTitle = async (req: Request, res: Response) => {
       .json({ message: "Internal Server Error" } as ErrorResponse);
   }
 };
+
