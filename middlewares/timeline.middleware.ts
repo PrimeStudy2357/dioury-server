@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { TIMELINE_ADMIN_ROLES } from "../constants/role";
+import { TIMELINE_WRITER_ROLES } from "../constants/role";
 import prismaService from "../services/connectors/prisma.service";
 import { ErrorResponse } from "../types/response";
 
@@ -8,9 +8,9 @@ type TimelineIdBody = {
 };
 
 /**
- * 요청 body의 timelineId 기준으로 ADMIN 이상(OWNER, ADMIN) 권한을 확인하는 미들웨어
+ * 요청 body의 timelineId 기준으로 FRIEND 이상(OWNER, ADMIN, FRIEND) 권한을 확인하는 미들웨어
  */
-export const isTimelineAdmin = async (
+export const isTimelineWriter = async (
   req: Request<any, any, TimelineIdBody>,
   res: Response,
   next: NextFunction,
@@ -35,7 +35,7 @@ export const isTimelineAdmin = async (
       where: { userId_timelineId: { userId, timelineId } },
     });
 
-    if (!member || !TIMELINE_ADMIN_ROLES.includes(member.role)) {
+    if (!member || !TIMELINE_WRITER_ROLES.includes(member.role)) {
       return res
         .status(403)
         .json({ message: "권한이 없습니다." } as ErrorResponse);

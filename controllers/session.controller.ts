@@ -121,6 +121,27 @@ export const getSessionListController = async (req: Request, res: Response) => {
   try {
     const validatedData = getSessionListSchema.parse(req.query);
     const { timelineId, order, perPage, page, sortBy } = validatedData;
+    const userId = req.session.userId!;
+
+    // 타임라인 진입과 같은 조건: 공개 타임라인이거나 멤버여야 조회 가능
+    const [timeline, member] = await Promise.all([
+      prismaService.timeline.findUnique({ where: { id: timelineId } }),
+      prismaService.timelineMember.findUnique({
+        where: { userId_timelineId: { userId, timelineId } },
+      }),
+    ]);
+
+    if (!timeline) {
+      return res
+        .status(404)
+        .json({ message: "타임라인을 찾을 수 없습니다." } as ErrorResponse);
+    }
+
+    if (!timeline.isPublic && !member) {
+      return res
+        .status(403)
+        .json({ message: "권한이 없습니다." } as ErrorResponse);
+    }
 
     /** 페이징 계산 */
     const skip = (page - 1) * perPage;
@@ -175,6 +196,7 @@ export const getSessionController = async (req: Request, res: Response) => {
       where: { id },
       include: {
         participants: true,
+        timeline: { select: { isPublic: true } },
       },
     });
 
@@ -184,32 +206,27 @@ export const getSessionController = async (req: Request, res: Response) => {
         .json({ message: "세션을 찾을 수 없습니다." } as ErrorResponse);
     }
 
-    // 비공개 세션은 타임라인 멤버만 조회 가능
-    if (!session.isPublic) {
-      const userId = req.session.userId;
-
-      if (!userId) {
-        return res
-          .status(401)
-          .json({ message: "로그인이 필요합니다." } as ErrorResponse);
-      }
-
-      const member = await prismaService.timelineMember.findUnique({
-        where: {
-          userId_timelineId: { userId, timelineId: session.timelineId },
+    const member = await prismaService.timelineMember.findUnique({
+      where: {
+        userId_timelineId: {
+          userId: req.session.userId!,
+          timelineId: session.timelineId,
         },
-      });
+      },
+    });
 
-      if (!member) {
-        return res
-          .status(403)
-          .json({ message: "권한이 없습니다." } as ErrorResponse);
-      }
+    // 비멤버는 공개 타임라인의 공개 세션만 조회 가능
+    if (!member && !(session.timeline.isPublic && session.isPublic)) {
+      return res
+        .status(403)
+        .json({ message: "권한이 없습니다." } as ErrorResponse);
     }
+
+    const { timeline, ...data } = session;
 
     return res.status(200).json({
       success: true,
-      data: session,
+      data,
     });
   } catch (error) {
     console.error(error);

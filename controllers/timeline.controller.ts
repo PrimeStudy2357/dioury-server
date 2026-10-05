@@ -95,9 +95,13 @@ export const getRecommendedTimelinesController = async (
     /** 페이징 계산 */
     const skip = (page - 1) * perPage;
 
+    // 비공개 타임라인은 목록에 노출하지 않는다
+    const where = { isPublic: true };
+
     const [totalCount, timelines] = await Promise.all([
-      prismaService.timeline.count({}),
+      prismaService.timeline.count({ where }),
       prismaService.timeline.findMany({
+        where,
         skip: skip,
         take: perPage,
         orderBy: {
@@ -141,9 +145,14 @@ export const getTimelineController = async (req: Request, res: Response) => {
   try {
     const { id } = getTimelineParamsSchema.parse(req.params);
 
-    const timeline = await prismaService.timeline.findUnique({
-      where: { id },
-    });
+    const userId = req.session.userId!;
+
+    const [timeline, member] = await Promise.all([
+      prismaService.timeline.findUnique({ where: { id } }),
+      prismaService.timelineMember.findUnique({
+        where: { userId_timelineId: { userId, timelineId: id } },
+      }),
+    ]);
 
     if (!timeline) {
       return res
@@ -151,9 +160,16 @@ export const getTimelineController = async (req: Request, res: Response) => {
         .json({ message: "타임라인을 찾을 수 없습니다." } as ErrorResponse);
     }
 
+    // 비공개 타임라인은 멤버만 조회 가능
+    if (!timeline.isPublic && !member) {
+      return res
+        .status(403)
+        .json({ message: "권한이 없습니다." } as ErrorResponse);
+    }
+
     return res.status(200).json({
       success: true,
-      data: timeline,
+      data: { ...timeline, myRole: member?.role ?? null },
     });
   } catch (error) {
     console.error(error);

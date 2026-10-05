@@ -24,7 +24,7 @@ router.get("/my", isAuthenticated, getJoinedTimelinesController);
 router.get("/checkname", isAuthenticated, checkTimelineTitle);
 
 /** 타임라인 상세 조회 */
-router.get("/:id", getTimelineController);
+router.get("/:id", isAuthenticated, getTimelineController);
 
 /** 타임라인 멤버 검색 (세션 참여자 선택 등에서 사용) */
 router.get("/:id/members", isAuthenticated, getTimelineMembersController);
