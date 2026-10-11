@@ -8,6 +8,7 @@ import {
   getSessionParamsSchema,
 } from "../schemas/session.schema";
 import prismaService from "../services/connectors/prisma.service";
+import redisService from "../services/connectors/redis.service";
 import { ErrorResponse } from "../types/response";
 
 /**
@@ -185,6 +186,10 @@ export const getSessionListController = async (req: Request, res: Response) => {
   }
 };
 
+// 같은 사용자의 연속 새로고침으로 조회수가 오르지 않도록 하는 쿨다운
+const SESSION_VIEW_COOLDOWN_SEC = 60;
+const REDIS_SESSION_VIEW_KEY_PREFIX = "dioury-sessionView-";
+
 /**
  * 세션 상세 조회 컨트롤러
  */
@@ -223,6 +228,28 @@ export const getSessionController = async (req: Request, res: Response) => {
     }
 
     const { timeline, ...data } = session;
+
+    try {
+      const counted = await redisService.set(
+        `${REDIS_SESSION_VIEW_KEY_PREFIX}${id}-${req.session.userId}`,
+        1,
+        {
+          expiration: { type: "EX", value: SESSION_VIEW_COOLDOWN_SEC },
+          condition: "NX",
+        },
+      );
+
+      if (counted) {
+        ({ viewCnt: data.viewCnt } = await prismaService.session.update({
+          where: { id },
+          data: { viewCnt: { increment: 1 } },
+          select: { viewCnt: true },
+        }));
+      }
+    } catch (error) {
+      // 조회수 증가 실패로 상세 조회까지 막지 않는다
+      console.error("조회수 증가 실패: ", error);
+    }
 
     return res.status(200).json({
       success: true,
