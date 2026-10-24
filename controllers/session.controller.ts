@@ -6,6 +6,7 @@ import {
   createSessionSchema,
   getSessionListSchema,
   getSessionParamsSchema,
+  toggleReactionSchema,
 } from "../schemas/session.schema";
 import prismaService from "../services/connectors/prisma.service";
 import redisService from "../services/connectors/redis.service";
@@ -186,6 +187,28 @@ export const getSessionListController = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * 세션 조회 권한 확인: 비멤버는 공개 타임라인의 공개 세션만 조회 가능
+ */
+const canAccessSession = async (
+  session: {
+    timelineId: number;
+    isPublic: boolean;
+    timeline: { isPublic: boolean };
+  },
+  userId: number,
+) => {
+  if (session.timeline.isPublic && session.isPublic) {
+    return true;
+  }
+
+  const member = await prismaService.timelineMember.findUnique({
+    where: { userId_timelineId: { userId, timelineId: session.timelineId } },
+  });
+
+  return !!member;
+};
+
 // 같은 사용자의 연속 새로고침으로 조회수가 오르지 않도록 하는 쿨다운
 const SESSION_VIEW_COOLDOWN_SEC = 60;
 const REDIS_SESSION_VIEW_KEY_PREFIX = "dioury-sessionView-";
@@ -211,17 +234,7 @@ export const getSessionController = async (req: Request, res: Response) => {
         .json({ message: "세션을 찾을 수 없습니다." } as ErrorResponse);
     }
 
-    const member = await prismaService.timelineMember.findUnique({
-      where: {
-        userId_timelineId: {
-          userId: req.session.userId!,
-          timelineId: session.timelineId,
-        },
-      },
-    });
-
-    // 비멤버는 공개 타임라인의 공개 세션만 조회 가능
-    if (!member && !(session.timeline.isPublic && session.isPublic)) {
+    if (!(await canAccessSession(session, req.session.userId!))) {
       return res
         .status(403)
         .json({ message: "권한이 없습니다." } as ErrorResponse);
@@ -270,3 +283,143 @@ export const getSessionController = async (req: Request, res: Response) => {
   }
 };
 
+
+/**
+ * 세션의 이모지별 반응 수와 요청자 반응 여부 (먼저 달린 이모지 순)
+ */
+const getReactionSummary = async (sessionId: number, userId: number) => {
+  const [groups, mine] = await Promise.all([
+    prismaService.reaction.groupBy({
+      by: ["emoji"],
+      where: { sessionId },
+      _count: { _all: true },
+      _min: { createdAt: true },
+      orderBy: { _min: { createdAt: "asc" } },
+    }),
+    prismaService.reaction.findMany({
+      where: { sessionId, userId },
+      select: { emoji: true },
+    }),
+  ]);
+  const myEmojis = new Set(mine.map((r) => r.emoji));
+
+  return groups.map((g) => ({
+    emoji: g.emoji,
+    count: g._count._all,
+    reacted: myEmojis.has(g.emoji),
+  }));
+};
+
+/**
+ * 반응 API 공통: 세션이 없으면 404, 조회 권한이 없으면 403 응답 후 false 반환
+ */
+const checkReactionAccess = async (
+  res: Response,
+  sessionId: number,
+  userId: number,
+) => {
+  const session = await prismaService.session.findUnique({
+    where: { id: sessionId },
+    include: { timeline: { select: { isPublic: true } } },
+  });
+
+  if (!session) {
+    res
+      .status(404)
+      .json({ message: "세션을 찾을 수 없습니다." } as ErrorResponse);
+    return false;
+  }
+
+  if (!(await canAccessSession(session, userId))) {
+    res.status(403).json({ message: "권한이 없습니다." } as ErrorResponse);
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * 세션 반응 목록 조회 컨트롤러
+ */
+export const getReactionsController = async (req: Request, res: Response) => {
+  try {
+    const { id } = getSessionParamsSchema.parse(req.params);
+    const userId = req.session.userId!;
+
+    if (!(await checkReactionAccess(res, id, userId))) {
+      return;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: await getReactionSummary(id, userId),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      } as ErrorResponse);
+    }
+
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
+  }
+};
+
+/**
+ * 세션 반응 토글 컨트롤러: 이미 남긴 이모지면 취소, 아니면 추가
+ */
+export const toggleReactionController = async (req: Request, res: Response) => {
+  try {
+    const { id } = getSessionParamsSchema.parse(req.params);
+    const { emoji } = toggleReactionSchema.parse(req.body);
+    const userId = req.session.userId!;
+
+    if (!(await checkReactionAccess(res, id, userId))) {
+      return;
+    }
+
+    await prismaService.$transaction(async (tx) => {
+      const { count } = await tx.reaction.deleteMany({
+        where: { sessionId: id, userId, emoji },
+      });
+
+      if (!count) {
+        await tx.reaction.create({ data: { sessionId: id, userId, emoji } });
+      }
+
+      await tx.session.update({
+        where: { id },
+        data: { reactionCnt: count ? { decrement: 1 } : { increment: 1 } },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: await getReactionSummary(id, userId),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: error.issues[0]?.message ?? "잘못된 요청입니다.",
+      } as ErrorResponse);
+    }
+
+    // 같은 이모지 요청이 동시에 들어와 둘 다 추가하려 한 경우
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return res
+        .status(409)
+        .json({ message: "이미 처리 중인 반응입니다." } as ErrorResponse);
+    }
+
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
+  }
+};

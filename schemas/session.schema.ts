@@ -39,3 +39,17 @@ export const getSessionListSchema = z.object({
   /** 정렬 방향 */
   order: z.enum(Object.values(LIST_ORDER)).default(LIST_ORDER.DESCENDING),
 });
+
+// 이모지 1개(피부색·ZWJ 조합·국기·키캡 포함). target(es2016)이 \p{}를 지원하지 않아 RegExp 생성자로 만든다
+const EMOJI_REGEX = new RegExp(
+  "^(?:\\p{Regional_Indicator}{2}|[#*0-9]\\uFE0F?\\u20E3|\\p{Extended_Pictographic}(?:\\uFE0F|\\p{Emoji_Modifier}|[\\u{E0020}-\\u{E007F}])*(?:\\u200D\\p{Extended_Pictographic}(?:\\uFE0F|\\p{Emoji_Modifier})*)*)$",
+  "u",
+);
+
+/** 세션 반응 토글 요청 스키마 */
+export const toggleReactionSchema = z.object({
+  emoji: z
+    .string()
+    .max(32)
+    .regex(EMOJI_REGEX, { error: "이모지 1개만 입력할 수 있습니다." }),
+});
