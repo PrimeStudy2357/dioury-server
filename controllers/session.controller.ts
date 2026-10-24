@@ -285,28 +285,29 @@ export const getSessionController = async (req: Request, res: Response) => {
 
 
 /**
- * 세션의 이모지별 반응 수와 요청자 반응 여부 (먼저 달린 이모지 순)
+ * 세션의 이모지별 반응 수, 반응한 사용자, 요청자 반응 여부 (먼저 달린 이모지·먼저 반응한 사용자 순)
  */
+// ponytail: 반응한 사용자를 전부 내려준다. 세션당 반응이 수백 개를 넘으면 이모지별 사용자 목록 API로 분리
 const getReactionSummary = async (sessionId: number, userId: number) => {
-  const [groups, mine] = await Promise.all([
-    prismaService.reaction.groupBy({
-      by: ["emoji"],
-      where: { sessionId },
-      _count: { _all: true },
-      _min: { createdAt: true },
-      orderBy: { _min: { createdAt: "asc" } },
-    }),
-    prismaService.reaction.findMany({
-      where: { sessionId, userId },
-      select: { emoji: true },
-    }),
-  ]);
-  const myEmojis = new Set(mine.map((r) => r.emoji));
+  const reactions = await prismaService.reaction.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      emoji: true,
+      user: { select: { id: true, nickname: true } },
+    },
+  });
 
-  return groups.map((g) => ({
-    emoji: g.emoji,
-    count: g._count._all,
-    reacted: myEmojis.has(g.emoji),
+  const byEmoji = new Map<string, { id: number; nickname: string }[]>();
+  for (const { emoji, user } of reactions) {
+    byEmoji.set(emoji, [...(byEmoji.get(emoji) ?? []), user]);
+  }
+
+  return [...byEmoji].map(([emoji, users]) => ({
+    emoji,
+    count: users.length,
+    reacted: users.some((u) => u.id === userId),
+    users,
   }));
 };
 
