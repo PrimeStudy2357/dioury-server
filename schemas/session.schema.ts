@@ -61,6 +61,8 @@ export const createCommentSchema = z.object({
     .trim()
     .min(1, { error: "댓글 내용을 입력해주세요." })
     .max(1000, { error: "댓글은 1000자를 초과할 수 없습니다." }),
+  /** 답글이면 답글을 달 최상위 댓글 id */
+  parentId: z.number().int().positive().optional(),
 });
 
 /** 세션 댓글 삭제 요청 파라미터 스키마 */

@@ -427,7 +427,8 @@ export const toggleReactionController = async (req: Request, res: Response) => {
 };
 
 /**
- * 댓글을 전부 내려준다. 세션당 댓글이 수백 개를 넘으면 페이지네이션 추가
+ * 댓글을 전부 내려준다. 최상위 댓글마다 답글을 replies로 묶어 작성 순으로 정렬.
+ * 세션당 댓글이 수백 개를 넘으면 페이지네이션 추가
  */
 const getComments = async (sessionId: number, userId: number) => {
   const comments = await prismaService.comment.findMany({
@@ -437,11 +438,46 @@ const getComments = async (sessionId: number, userId: number) => {
       id: true,
       content: true,
       createdAt: true,
+      parentId: true,
+      deletedAt: true,
       user: { select: { id: true, nickname: true } },
     },
   });
 
-  return comments.map((c) => ({ ...c, isMine: c.user.id === userId }));
+  const toView = (c: (typeof comments)[number]) => ({
+    id: c.id,
+    content: c.content,
+    createdAt: c.createdAt,
+    user: c.user,
+    isMine: c.user.id === userId,
+  });
+
+  const repliesByParent = new Map<number, ReturnType<typeof toView>[]>();
+  for (const c of comments) {
+    if (c.parentId === null) continue;
+    const replies = repliesByParent.get(c.parentId) ?? [];
+    replies.push(toView(c));
+    repliesByParent.set(c.parentId, replies);
+  }
+
+  return comments
+    .filter((c) => c.parentId === null)
+    .map((c) => {
+      const replies = repliesByParent.get(c.id) ?? [];
+
+      // soft delete된 댓글은 작성자·내용을 숨기고 자리만 남긴다
+      return c.deletedAt
+        ? {
+            id: c.id,
+            content: null,
+            createdAt: c.createdAt,
+            user: null,
+            isMine: false,
+            isDeleted: true,
+            replies,
+          }
+        : { ...toView(c), isDeleted: false, replies };
+    });
 };
 
 /**
@@ -480,22 +516,47 @@ export const getCommentsController = async (req: Request, res: Response) => {
 export const createCommentController = async (req: Request, res: Response) => {
   try {
     const { id } = getSessionParamsSchema.parse(req.params);
-    const { content } = createCommentSchema.parse(req.body);
+    const { content, parentId } = createCommentSchema.parse(req.body);
     const userId = req.session.userId!;
 
     if (!(await checkSessionAccess(res, id, userId))) {
       return;
     }
 
-    await prismaService.$transaction([
-      prismaService.comment.create({
-        data: { sessionId: id, userId, content },
-      }),
-      prismaService.session.update({
+    const created = await prismaService.$transaction(async (tx) => {
+      if (parentId !== undefined) {
+        // 같은 세션의 삭제되지 않은 최상위 댓글에만 답글 허용 (답글의 답글 불가)
+        const parent = await tx.comment.findFirst({
+          where: {
+            id: parentId,
+            sessionId: id,
+            parentId: null,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (!parent) {
+          return false;
+        }
+      }
+
+      await tx.comment.create({
+        data: { sessionId: id, userId, content, parentId },
+      });
+      await tx.session.update({
         where: { id },
         data: { commentCnt: { increment: 1 } },
-      }),
-    ]);
+      });
+
+      return true;
+    });
+
+    if (!created) {
+      return res
+        .status(400)
+        .json({ message: "답글을 달 댓글을 찾을 수 없습니다." } as ErrorResponse);
+    }
 
     return res.status(201).json({
       success: true,
@@ -509,6 +570,16 @@ export const createCommentController = async (req: Request, res: Response) => {
       } as ErrorResponse);
     }
 
+    // 확인 직후 부모 댓글이 삭제된 경우 (FK 위반)
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "답글을 달 댓글을 찾을 수 없습니다." } as ErrorResponse);
+    }
+
     return res
       .status(500)
       .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
@@ -517,6 +588,10 @@ export const createCommentController = async (req: Request, res: Response) => {
 
 /**
  * 세션 댓글 삭제 컨트롤러 (작성자 본인만). 갱신된 댓글 목록을 반환
+ * - 답글이 달린 최상위 댓글: soft delete ("삭제된 댓글"로 표시)
+ * - 그 외 댓글·답글: hard delete
+ * - soft delete된 부모의 마지막 답글을 지우면 부모도 hard delete
+ * commentCnt는 사용자가 지운 시점에 1 감소 (부모가 따라 지워질 때는 이미 차감됨)
  */
 export const deleteCommentController = async (req: Request, res: Response) => {
   try {
@@ -528,10 +603,36 @@ export const deleteCommentController = async (req: Request, res: Response) => {
     }
 
     const deleted = await prismaService.$transaction(async (tx) => {
-      // 조건에 맞는 댓글만 지우므로 남의 댓글·다른 세션의 댓글은 count 0
-      const { count } = await tx.comment.deleteMany({
-        where: { id: commentId, sessionId: id, userId },
+      // 남의 댓글·다른 세션의 댓글·이미 삭제된 댓글은 찾지 않는다
+      const target = await tx.comment.findFirst({
+        where: { id: commentId, sessionId: id, userId, deletedAt: null },
+        select: { parentId: true, _count: { select: { replies: true } } },
       });
+
+      if (!target) {
+        return false;
+      }
+
+      let count: number;
+      if (target.parentId === null && target._count.replies > 0) {
+        // 동시에 같은 댓글을 지우는 요청이 있어도 한 번만 차감되도록 count로 판별
+        ({ count } = await tx.comment.updateMany({
+          where: { id: commentId, deletedAt: null },
+          data: { deletedAt: new Date() },
+        }));
+      } else {
+        ({ count } = await tx.comment.deleteMany({ where: { id: commentId } }));
+
+        if (count && target.parentId !== null) {
+          await tx.comment.deleteMany({
+            where: {
+              id: target.parentId,
+              deletedAt: { not: null },
+              replies: { none: {} },
+            },
+          });
+        }
+      }
 
       if (count) {
         await tx.session.update({
@@ -558,6 +659,16 @@ export const deleteCommentController = async (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         message: "잘못된 요청 파라미터입니다.",
+      } as ErrorResponse);
+    }
+
+    // 답글이 없는 걸 확인한 직후 답글이 달려 hard delete가 막힌 경우 (FK 위반)
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      return res.status(409).json({
+        message: "방금 답글이 달렸습니다. 다시 시도해주세요.",
       } as ErrorResponse);
     }
 

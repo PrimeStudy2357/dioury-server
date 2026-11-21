@@ -55,14 +55,21 @@ model Reaction {
 }
 
 model Comment {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   sessionId Int
   userId    Int
-  content   String   @db.Text
-  createdAt DateTime @default(now())
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+  // 답글이면 최상위 댓글 id (답글의 답글은 허용하지 않음)
+  parentId  Int?
+  // 답글이 남아 있는 댓글을 삭제하면 soft delete, 답글이 모두 사라지면 hard delete
+  deletedAt DateTime?
 
-  session Session @relation(fields: [sessionId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
+  session Session   @relation(fields: [sessionId], references: [id])
+  user    User      @relation(fields: [userId], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Restrict)
+  replies Comment[] @relation("CommentReplies")
 
+  @@index([parentId])
   @@map("comments")
 }
