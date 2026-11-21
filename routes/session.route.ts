@@ -5,6 +5,9 @@ import {
   getSessionListController,
   getReactionsController,
   toggleReactionController,
+  getCommentsController,
+  createCommentController,
+  deleteCommentController,
 } from "../controllers/session.controller";
 import { isAuthenticated } from "../middlewares/auth.middleware";
 import { isTimelineWriter } from "../middlewares/timeline.middleware";
@@ -25,6 +28,19 @@ router.get("/:id/reaction", isAuthenticated, getReactionsController);
 
 /** 세션 반응 토글 (세션을 볼 수 있으면 누구나) */
 router.post("/:id/reaction", isAuthenticated, toggleReactionController);
+
+/** 세션 댓글 조회 */
+router.get("/:id/comment", isAuthenticated, getCommentsController);
+
+/** 세션 댓글 작성 (세션을 볼 수 있으면 누구나) */
+router.post("/:id/comment", isAuthenticated, createCommentController);
+
+/** 세션 댓글 삭제 (작성자 본인만) */
+router.delete(
+  "/:id/comment/:commentId",
+  isAuthenticated,
+  deleteCommentController,
+);
 
 export default router;
 

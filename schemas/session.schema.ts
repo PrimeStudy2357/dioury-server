@@ -53,3 +53,17 @@ export const toggleReactionSchema = z.object({
     .max(32)
     .regex(EMOJI_REGEX, { error: "이모지 1개만 입력할 수 있습니다." }),
 });
+
+/** 세션 댓글 작성 요청 스키마 */
+export const createCommentSchema = z.object({
+  content: z
+    .string()
+    .trim()
+    .min(1, { error: "댓글 내용을 입력해주세요." })
+    .max(1000, { error: "댓글은 1000자를 초과할 수 없습니다." }),
+});
+
+/** 세션 댓글 삭제 요청 파라미터 스키마 */
+export const deleteCommentParamsSchema = getSessionParamsSchema.extend({
+  commentId: z.coerce.number().int().positive(),
+});

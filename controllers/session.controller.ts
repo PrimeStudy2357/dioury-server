@@ -7,6 +7,8 @@ import {
   getSessionListSchema,
   getSessionParamsSchema,
   toggleReactionSchema,
+  createCommentSchema,
+  deleteCommentParamsSchema,
 } from "../schemas/session.schema";
 import prismaService from "../services/connectors/prisma.service";
 import redisService from "../services/connectors/redis.service";
@@ -283,7 +285,6 @@ export const getSessionController = async (req: Request, res: Response) => {
   }
 };
 
-
 /**
  * 세션의 이모지별 반응 수, 반응한 사용자, 요청자 반응 여부 (먼저 달린 이모지·먼저 반응한 사용자 순)
  */
@@ -312,9 +313,9 @@ const getReactionSummary = async (sessionId: number, userId: number) => {
 };
 
 /**
- * 반응 API 공통: 세션이 없으면 404, 조회 권한이 없으면 403 응답 후 false 반환
+ * 반응·댓글 API 공통: 세션이 없으면 404, 조회 권한이 없으면 403 응답 후 false 반환
  */
-const checkReactionAccess = async (
+const checkSessionAccess = async (
   res: Response,
   sessionId: number,
   userId: number,
@@ -347,7 +348,7 @@ export const getReactionsController = async (req: Request, res: Response) => {
     const { id } = getSessionParamsSchema.parse(req.params);
     const userId = req.session.userId!;
 
-    if (!(await checkReactionAccess(res, id, userId))) {
+    if (!(await checkSessionAccess(res, id, userId))) {
       return;
     }
 
@@ -378,7 +379,7 @@ export const toggleReactionController = async (req: Request, res: Response) => {
     const { emoji } = toggleReactionSchema.parse(req.body);
     const userId = req.session.userId!;
 
-    if (!(await checkReactionAccess(res, id, userId))) {
+    if (!(await checkSessionAccess(res, id, userId))) {
       return;
     }
 
@@ -424,3 +425,145 @@ export const toggleReactionController = async (req: Request, res: Response) => {
       .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
   }
 };
+
+/**
+ * 댓글을 전부 내려준다. 세션당 댓글이 수백 개를 넘으면 페이지네이션 추가
+ */
+const getComments = async (sessionId: number, userId: number) => {
+  const comments = await prismaService.comment.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      content: true,
+      createdAt: true,
+      user: { select: { id: true, nickname: true } },
+    },
+  });
+
+  return comments.map((c) => ({ ...c, isMine: c.user.id === userId }));
+};
+
+/**
+ * 세션 댓글 목록 조회 컨트롤러 (작성 순)
+ */
+export const getCommentsController = async (req: Request, res: Response) => {
+  try {
+    const { id } = getSessionParamsSchema.parse(req.params);
+    const userId = req.session.userId!;
+
+    if (!(await checkSessionAccess(res, id, userId))) {
+      return;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: await getComments(id, userId),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      } as ErrorResponse);
+    }
+
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
+  }
+};
+
+/**
+ * 세션 댓글 작성 컨트롤러. 갱신된 댓글 목록을 반환
+ */
+export const createCommentController = async (req: Request, res: Response) => {
+  try {
+    const { id } = getSessionParamsSchema.parse(req.params);
+    const { content } = createCommentSchema.parse(req.body);
+    const userId = req.session.userId!;
+
+    if (!(await checkSessionAccess(res, id, userId))) {
+      return;
+    }
+
+    await prismaService.$transaction([
+      prismaService.comment.create({
+        data: { sessionId: id, userId, content },
+      }),
+      prismaService.session.update({
+        where: { id },
+        data: { commentCnt: { increment: 1 } },
+      }),
+    ]);
+
+    return res.status(201).json({
+      success: true,
+      data: await getComments(id, userId),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: error.issues[0]?.message ?? "잘못된 요청입니다.",
+      } as ErrorResponse);
+    }
+
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
+  }
+};
+
+/**
+ * 세션 댓글 삭제 컨트롤러 (작성자 본인만). 갱신된 댓글 목록을 반환
+ */
+export const deleteCommentController = async (req: Request, res: Response) => {
+  try {
+    const { id, commentId } = deleteCommentParamsSchema.parse(req.params);
+    const userId = req.session.userId!;
+
+    if (!(await checkSessionAccess(res, id, userId))) {
+      return;
+    }
+
+    const deleted = await prismaService.$transaction(async (tx) => {
+      // 조건에 맞는 댓글만 지우므로 남의 댓글·다른 세션의 댓글은 count 0
+      const { count } = await tx.comment.deleteMany({
+        where: { id: commentId, sessionId: id, userId },
+      });
+
+      if (count) {
+        await tx.session.update({
+          where: { id },
+          data: { commentCnt: { decrement: 1 } },
+        });
+      }
+
+      return count > 0;
+    });
+
+    if (!deleted) {
+      return res
+        .status(404)
+        .json({ message: "삭제할 댓글을 찾을 수 없습니다." } as ErrorResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: await getComments(id, userId),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "잘못된 요청 파라미터입니다.",
+      } as ErrorResponse);
+    }
+
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." } as ErrorResponse);
+  }
+};
+
